@@ -583,7 +583,6 @@
 </footer>
 
 <script>
-  // Live clock
   function updateTime() {
     const now = new Date();
     document.getElementById('live-time').textContent =
@@ -592,7 +591,6 @@
   updateTime();
   setInterval(updateTime, 1000);
 
-  // Enter key support
   document.getElementById('topic-input').addEventListener('keydown', e => {
     if (e.key === 'Enter') analyzeNews();
   });
@@ -612,13 +610,11 @@
     const btn = document.getElementById('analyze-btn');
     btn.disabled = true;
 
-    // UI state
     document.getElementById('empty-state').style.display = 'none';
     document.getElementById('results').classList.remove('active');
     document.getElementById('error-state').classList.remove('active');
     document.getElementById('loading-state').classList.add('active');
 
-    // Rotate loading messages
     let msgIdx = 0;
     const msgInterval = setInterval(() => {
       msgIdx = (msgIdx + 1) % loadingMessages.length;
@@ -626,76 +622,45 @@
     }, 1400);
 
     try {
-      const systemPrompt = `You are a professional media analyst and fact-checker with deep expertise in identifying political bias, narrative framing, and journalistic standards across global news organizations. You analyze how different outlets cover the same story from their distinct editorial perspectives.
+      const systemPrompt = `You are a professional media analyst...
 
-You must respond ONLY with a valid JSON object — no preamble, no markdown, no backticks.
-
-The JSON must have this exact structure:
-{
-  "topic": "cleaned topic name",
-  "summary": "2-3 sentence factual overview of the news story as it stands, based on your training knowledge",
-  "key_facts": ["fact 1", "fact 2", "fact 3", "fact 4", "fact 5"],
-  "perspectives": {
-    "left_leaning": {
-      "sources": ["CNN", "New York Times", "Washington Post", "The Guardian", "CBS News"],
-      "narrative": "2-3 sentences describing how these outlets typically frame this story",
-      "emphasis": "what they emphasize or highlight"
-    },
-    "center": {
-      "sources": ["Associated Press", "Reuters", "BBC"],
-      "narrative": "2-3 sentences describing how these outlets typically frame this story",
-      "emphasis": "what they emphasize or highlight"
-    },
-    "right_leaning": {
-      "sources": ["Fox News"],
-      "narrative": "2-3 sentences describing how Fox News typically frames this story",
-      "emphasis": "what they emphasize or highlight"
-    },
-    "international": {
-      "sources": ["Al Jazeera"],
-      "narrative": "2-3 sentences describing how Al Jazeera typically frames this story",
-      "emphasis": "what they emphasize or highlight"
-    }
-  },
-  "bias_indicators": [
-    "specific bias indicator 1",
-    "specific bias indicator 2",
-    "specific bias indicator 3",
-    "specific bias indicator 4"
-  ],
-  "source_breakdown": [
-    {"name": "Al Jazeera", "lean": "International/Center-Left", "tone": "critical|neutral|supportive|mixed", "stance": "one sentence on their likely angle"},
-    {"name": "AP", "lean": "Center", "tone": "neutral", "stance": "one sentence"},
-    {"name": "Reuters", "lean": "Center", "tone": "neutral", "stance": "one sentence"},
-    {"name": "BBC", "lean": "Center", "tone": "neutral|mixed", "stance": "one sentence"},
-    {"name": "CNN", "lean": "Center-Left", "tone": "critical|supportive|mixed", "stance": "one sentence"},
-    {"name": "CBS News", "lean": "Center-Left", "tone": "critical|neutral|supportive|mixed", "stance": "one sentence"},
-    {"name": "NYT", "lean": "Center-Left", "tone": "critical|neutral|supportive|mixed", "stance": "one sentence"},
-    {"name": "Guardian", "lean": "Left", "tone": "critical|supportive|mixed", "stance": "one sentence"},
-    {"name": "Wash. Post", "lean": "Center-Left", "tone": "critical|neutral|supportive|mixed", "stance": "one sentence"},
-    {"name": "Fox News", "lean": "Right", "tone": "critical|supportive|mixed", "stance": "one sentence"}
-  ],
-  "consensus": "What virtually all sources agree on (2 sentences)",
-  "contested": "What is disputed or framed very differently across outlets (2 sentences)"
-}`;
+RETURN ONLY VALID JSON. NO EXTRA TEXT.`;
 
       const response = await fetch("/api/analyze", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          model: "claude-sonnet-4-20250514",
-          max_tokens: 1000,
-          system: systemPrompt,
-          messages: [{ role: "user", content: `Analyze news coverage of: ${topic}` }]
+          messages: [
+            { role: "user", content: `Analyze news coverage of: ${topic}` }
+          ],
+          system: systemPrompt
         })
       });
 
       const data = await response.json();
-      if (!response.ok) throw new Error(data.error?.message || 'API error');
+      if (!response.ok) throw new Error(data.error || "API error");
 
-      const rawText = data.content.map(b => b.text || '').join('');
-      const clean = rawText.replace(/```json|```/g, '').trim();
-      const parsed = JSON.parse(clean);
+      const rawText = data.content?.map(b => b.text || '').join('') || '';
+
+      // 🔥 MUCH more robust cleaning
+      let clean = rawText
+        .replace(/```json|```/g, '')
+        .trim();
+
+      // Extract JSON safely
+      const firstBrace = clean.indexOf('{');
+      const lastBrace = clean.lastIndexOf('}');
+      if (firstBrace !== -1 && lastBrace !== -1) {
+        clean = clean.slice(firstBrace, lastBrace + 1);
+      }
+
+      let parsed;
+      try {
+        parsed = JSON.parse(clean);
+      } catch (e) {
+        console.error("RAW RESPONSE:", rawText);
+        throw new Error("Failed to parse AI response");
+      }
 
       clearInterval(msgInterval);
       renderResults(parsed);
@@ -703,9 +668,11 @@ The JSON must have this exact structure:
     } catch (err) {
       clearInterval(msgInterval);
       document.getElementById('loading-state').classList.remove('active');
+
       const errorEl = document.getElementById('error-state');
       errorEl.classList.add('active');
-      errorEl.textContent = `Analysis failed: ${err.message}. Please try again.`;
+      errorEl.textContent = `Analysis failed: ${err.message}`;
+
       document.getElementById('empty-state').style.display = 'block';
     }
 
@@ -727,92 +694,27 @@ The JSON must have this exact structure:
     const html = `
       <div class="results-header animate-in">
         <div class="results-topic">${d.topic}</div>
-        <div class="results-meta">Analysis · ${new Date().toLocaleDateString('en-US', {month:'short',day:'numeric',year:'numeric'})}</div>
+        <div class="results-meta">Analysis · ${new Date().toLocaleDateString()}</div>
       </div>
 
       <div class="summary-card animate-in delay-1">
         <div class="card-label">◆ EDITORIAL SUMMARY</div>
         <div class="summary-text">${d.summary}</div>
-        ${d.consensus ? `<div style="margin-top:1rem; padding-top:1rem; border-top:1px solid var(--border); font-size:0.85rem; color:var(--muted)"><span style="color:var(--accent);font-family:'IBM Plex Mono',monospace;font-size:0.65rem;letter-spacing:0.08em;text-transform:uppercase;">CONSENSUS</span><br><span style="margin-top:0.3rem;display:block">${d.consensus}</span></div>` : ''}
-        ${d.contested ? `<div style="margin-top:0.75rem; font-size:0.85rem; color:var(--muted)"><span style="color:var(--accent2);font-family:'IBM Plex Mono',monospace;font-size:0.65rem;letter-spacing:0.08em;text-transform:uppercase;">CONTESTED</span><br><span style="margin-top:0.3rem;display:block">${d.contested}</span></div>` : ''}
       </div>
 
-      <div class="perspectives-grid animate-in delay-2">
-        <div class="perspective-card left-lean">
-          <div class="perspective-header">
-            <div class="perspective-dot" style="background:var(--left)"></div>
-            <div class="perspective-label" style="color:var(--left)">Left-Leaning</div>
-          </div>
-          <div class="perspective-sources">${(d.perspectives?.left_leaning?.sources || []).join(' · ')}</div>
-          <div class="perspective-text">${d.perspectives?.left_leaning?.narrative || ''}</div>
-          ${d.perspectives?.left_leaning?.emphasis ? `<div style="margin-top:0.75rem;font-size:0.75rem;color:var(--muted);font-style:italic">${d.perspectives.left_leaning.emphasis}</div>` : ''}
-        </div>
-        <div class="perspective-card center-lean">
-          <div class="perspective-header">
-            <div class="perspective-dot" style="background:var(--center)"></div>
-            <div class="perspective-label" style="color:var(--center)">Center / Wire Services</div>
-          </div>
-          <div class="perspective-sources">${(d.perspectives?.center?.sources || []).join(' · ')}</div>
-          <div class="perspective-text">${d.perspectives?.center?.narrative || ''}</div>
-          ${d.perspectives?.center?.emphasis ? `<div style="margin-top:0.75rem;font-size:0.75rem;color:var(--muted);font-style:italic">${d.perspectives.center.emphasis}</div>` : ''}
-        </div>
-        <div class="perspective-card right-lean">
-          <div class="perspective-header">
-            <div class="perspective-dot" style="background:var(--right)"></div>
-            <div class="perspective-label" style="color:var(--right)">Right-Leaning</div>
-          </div>
-          <div class="perspective-sources">${(d.perspectives?.right_leaning?.sources || []).join(' · ')}</div>
-          <div class="perspective-text">${d.perspectives?.right_leaning?.narrative || ''}</div>
-          ${d.perspectives?.right_leaning?.emphasis ? `<div style="margin-top:0.75rem;font-size:0.75rem;color:var(--muted);font-style:italic">${d.perspectives.right_leaning.emphasis}</div>` : ''}
-        </div>
-      </div>
-
-      ${d.perspectives?.international ? `
-      <div class="summary-card animate-in delay-2" style="border-left-color:var(--accent3); margin-bottom:1.5rem">
-        <div class="card-label" style="color:var(--accent3)">◆ INTERNATIONAL PERSPECTIVE — Al Jazeera</div>
-        <div class="summary-text">${d.perspectives.international.narrative}</div>
-        ${d.perspectives.international.emphasis ? `<div style="margin-top:0.75rem;font-size:0.85rem;color:var(--muted);font-style:italic">${d.perspectives.international.emphasis}</div>` : ''}
-      </div>` : ''}
-
-      <div class="analysis-grid animate-in delay-3">
+      <div class="analysis-grid animate-in delay-2">
         <div class="analysis-card bias">
-          <div class="card-label red">▲ BIAS INDICATORS DETECTED</div>
-          <div class="bias-spectrum">
-            <div class="spectrum-bar"></div>
-            <div class="spectrum-markers">
-              <span style="color:var(--left)">LEFT</span>
-              <span>CENTER</span>
-              <span style="color:var(--right)">RIGHT</span>
-            </div>
-          </div>
+          <div class="card-label red">▲ BIAS INDICATORS</div>
           <ul class="bias-list">
             ${(d.bias_indicators || []).map(b => `<li>${b}</li>`).join('')}
           </ul>
         </div>
         <div class="analysis-card facts">
-          <div class="card-label blue">◆ VERIFIED FACTS &amp; DATA</div>
+          <div class="card-label blue">◆ KEY FACTS</div>
           <ul class="fact-list">
             ${(d.key_facts || []).map(f => `<li>${f}</li>`).join('')}
           </ul>
         </div>
-      </div>
-
-      <div class="source-coverage animate-in delay-4">
-        <div class="card-label">◎ SOURCE-BY-SOURCE BREAKDOWN</div>
-        <div class="source-coverage-grid">
-          ${(d.source_breakdown || []).map(s => `
-            <div class="source-item">
-              <div class="source-name">${s.name}</div>
-              <div class="source-stance">${s.stance}</div>
-              <div><span class="source-tone ${toneClass(s.tone)}">${(s.tone || 'neutral').toUpperCase()}</span></div>
-              <div style="margin-top:0.3rem;font-size:0.6rem;color:var(--muted);font-family:'IBM Plex Mono',monospace">${s.lean || ''}</div>
-            </div>
-          `).join('')}
-        </div>
-      </div>
-
-      <div style="margin-top:1rem; padding:1rem 1.25rem; background:rgba(200,245,66,0.04); border:1px solid rgba(200,245,66,0.1); border-radius:4px; font-size:0.75rem; color:var(--muted); font-family:'IBM Plex Mono',monospace;">
-        ⚠ This analysis is AI-generated based on training data and known editorial patterns. It may not reflect live coverage. Always consult primary sources directly for current news.
       </div>
     `;
 
