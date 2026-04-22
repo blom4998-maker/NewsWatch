@@ -679,7 +679,7 @@ The JSON must have this exact structure:
   "contested": "What is disputed or framed very differently across outlets (2 sentences)"
 }`;
 
-      const response = await fetch("https://api.anthropic.com/v1/messages", {
+      const response = await fetch("/api/analyze", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
