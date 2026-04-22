@@ -6,7 +6,6 @@ export default async function handler(req, res) {
   try {
     const { messages, system } = req.body;
 
-    // Combine system + user message into one prompt
     const userMessage = messages?.[0]?.content || "";
     const prompt = `${system}\n\nUser request: ${userMessage}`;
 
@@ -22,14 +21,17 @@ export default async function handler(req, res) {
             {
               parts: [{ text: prompt }]
             }
-          ]
+          ],
+          generationConfig: {
+            response_mime_type: "application/json", // 🔥 THIS IS THE FIX
+            temperature: 0.3
+          }
         })
       }
     );
 
     const data = await response.json();
 
-    // Normalize response so your frontend still works
     const text =
       data.candidates?.[0]?.content?.parts?.[0]?.text || "";
 
