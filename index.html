@@ -622,9 +622,22 @@
     }, 1400);
 
     try {
-      const systemPrompt = `You are a professional media analyst...
+      const systemPrompt = `
+You MUST return ONLY valid JSON.
+Do not include any explanation, markdown, or text before or after the JSON.
+The response must be directly parseable with JSON.parse().
 
-RETURN ONLY VALID JSON. NO EXTRA TEXT.`;
+You are a professional media analyst and fact-checker with deep expertise in identifying political bias, narrative framing, and journalistic standards across global news organizations. You analyze how different outlets cover the same story from their distinct editorial perspectives.
+
+You must respond ONLY with a valid JSON object — no preamble, no markdown, no backticks.
+
+The JSON must have this exact structure:
+{
+  "topic": "cleaned topic name",
+  "summary": "2-3 sentence factual overview...",
+  ...
+}
+`;
 
       const response = await fetch("/api/analyze", {
         method: "POST",
